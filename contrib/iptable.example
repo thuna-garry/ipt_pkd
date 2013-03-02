@@ -1,0 +1,28 @@
+
+
+#--- port forward for backup1 (SPA) ------
+#key generation:  echo 'ooga booga' | md5sum
+key='0x6bddf7e82d18e9cd1e4ddd14031d3dc5'
+extPort=2241
+fwdToIp=10.1.4.41
+fwdToPort=22
+
+iptables -A INPUT              -p udp -m pkd --key $key --tag b1pf --window 0  \
+                               -m recent --set --name backup1portForward
+
+iptables -t nat -A PREROUTING  -p tcp -i $EXT_IF --dport $extPort  \
+                               -m state --state NEW  \
+                               -m recent --rcheck --name backup1portForward --seconds 200 --hitcount 1  \
+                               -j DNAT --to-destination $fwdToIp:$fwdToPort
+
+iptables -t nat -A PREROUTING  -p tcp -i $EXT_IF --dport $extPort  \
+                               -m state --state ESTABLISHED,RELATED  \
+                               -j DNAT --to-destination $fwdToIp:$fwdToPort
+
+iptables          -A FORWARD   -p tcp -i $EXT_IF -o $USER_IF -d $fwdToIp --dport $fwdToPort  \
+                               -m state --state NEW,ESTABLISHED,RELATED  \
+                               -j ACCEPT
+
+iptables -A INPUT              -p tcp -i $EXT_IF --dport $extPort  \
+                               -m state --state NEW -j REJECT --reject-with tcp-reset
+
